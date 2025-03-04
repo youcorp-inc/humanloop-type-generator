@@ -1,0 +1,428 @@
+import { HumanloopClient } from "humanloop";
+import * as fs from "fs";
+import * as path from "path";
+
+// Type definitions for the Human Loop client
+interface TypedHumanloopOptions {
+  apiKey: string;
+}
+
+// Main class that wraps the Human Loop SDK with strong typing
+export class TypedHumanloop {
+  private client: HumanloopClient;
+  private typeDefinitions: Record<string, string> = {};
+  private promptTools: Record<string, any> = {};
+  private promptIds: Record<string, string> = {}; // Store prompt IDs for more resilient calls
+
+  constructor(options: TypedHumanloopOptions) {
+    this.client = new HumanloopClient({
+      apiKey: options.apiKey,
+    });
+  }
+
+  /**
+   * Initialize the client by fetching all prompts and generating types
+   */
+  async initialize(
+    environmentId: string,
+    outputDir: string = "./generated-types"
+  ) {
+    console.log(
+      `Initializing TypedHumanloop for environment: ${environmentId}`
+    );
+
+    try {
+      // Fetch all prompts in the workspace
+      const promptsResponse = await this.client.prompts.list();
+
+      const prompts = promptsResponse.data;
+      console.log(`Found ${prompts.length} prompts`);
+
+      // Create output directory if it doesn't exist
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      // Generate index file to export all types
+      let indexFileContent = "";
+
+      // Process each prompt
+      for (const promptSummary of prompts) {
+        try {
+          // Fetch detailed prompt information
+          const promptResponse = await this.client.prompts.get(
+            promptSummary.id,
+            {
+              environment: environmentId,
+            }
+          );
+
+          const prompt = promptResponse;
+
+          // Skip prompts without tools
+          if (!prompt.tools || prompt.tools.length === 0) {
+            console.log(`Skipping prompt ${prompt.path} - no tools defined`);
+            continue;
+          }
+
+          // Store the prompt ID for more resilient calls
+          this.promptIds[prompt.path] = prompt.id;
+
+          // We're assuming each prompt has exactly one tool
+          const tool = prompt.tools[0];
+
+          // Store the tool definition for runtime use
+          this.promptTools[prompt.path] = tool;
+
+          // Generate TypeScript interface for the tool output
+          const interfaceName = this.getInterfaceName(prompt.path);
+          const typeDefinition = this.generateInterfaceFromJsonSchema(
+            interfaceName,
+            tool.parameters
+          );
+
+          // Generate TypeScript interface for the input
+          const inputInterfaceName = this.getInputInterfaceName(prompt.path);
+          const inputTypeDefinition = this.generateInputInterfaceFromSchema(
+            inputInterfaceName,
+            [],
+            (prompt.template as { content: string }[]) || []
+          );
+
+          // Combine both type definitions
+          const combinedTypeDefinition =
+            inputTypeDefinition + "\n" + typeDefinition;
+
+          // Store the type definition
+          this.typeDefinitions[prompt.path] = combinedTypeDefinition;
+
+          // Write the type definition to a file
+          const fileName = this.sanitizeFileName(prompt.path);
+          const filePath = path.join(outputDir, `${fileName}.ts`);
+          fs.writeFileSync(filePath, combinedTypeDefinition);
+
+          // Add export to index file
+          indexFileContent += `export * from './${fileName}';\n`;
+
+          console.log(`Generated types for prompt: ${prompt.path}`);
+        } catch (error) {
+          // Check if this is a file credentials error
+          if (
+            (error as any).statusCode === 403 &&
+            (error as any).body?.detail?.description?.includes(
+              "Cannot validate credentials for file"
+            )
+          ) {
+            console.log(
+              `Skipping prompt ${promptSummary.path} - file credential access error`
+            );
+            continue;
+          }
+
+          console.error(
+            `Error processing prompt ${promptSummary.path}:`,
+            error
+          );
+        }
+      }
+
+      // Generate client file
+      const clientFileContent = this.generateClientFile(environmentId);
+      fs.writeFileSync(path.join(outputDir, "client.ts"), clientFileContent);
+
+      // Write index file
+      fs.writeFileSync(path.join(outputDir, "index.ts"), indexFileContent);
+
+      console.log("Type generation complete!");
+    } catch (error) {
+      console.error("Error initializing TypedHumanloop:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a TypeScript file with a typed client
+   */
+  private generateClientFile(environmentId: string): string {
+    let clientFileContent = `import { HumanloopClient } from "humanloop";\n`;
+    clientFileContent += `import { ChatMessage } from "humanloop/api";\n`;
+
+    // Import all generated interfaces
+    for (const [promptPath, _] of Object.entries(this.typeDefinitions)) {
+      const fileName = this.sanitizeFileName(promptPath);
+      const interfaceName = this.getInterfaceName(promptPath);
+      const inputInterfaceName = this.getInputInterfaceName(promptPath);
+      clientFileContent += `import { ${interfaceName}, ${inputInterfaceName} } from './${fileName}';\n`;
+    }
+
+    // Generate namespace interfaces
+    const namespaces: Record<
+      string,
+      Array<{ path: string; name: string }>
+    > = {};
+
+    // Group prompts by namespace
+    for (const promptPath of Object.keys(this.typeDefinitions)) {
+      const parts = promptPath.split("/");
+      if (parts.length > 1) {
+        const namespace = parts[0].toLowerCase().replace(/[^a-z]/g, "");
+        const methodName = this.getMethodName(parts[parts.length - 1]);
+        if (!namespaces[namespace]) {
+          namespaces[namespace] = [];
+        }
+        namespaces[namespace].push({ path: promptPath, name: methodName });
+      }
+    }
+
+    // Generate namespace interfaces
+    for (const [namespace, prompts] of Object.entries(namespaces)) {
+      clientFileContent += `\ninterface ${this.capitalizeFirst(
+        namespace
+      )}Namespace {\n`;
+      for (const { path, name } of prompts) {
+        const interfaceName = this.getInterfaceName(path);
+        const inputInterfaceName = this.getInputInterfaceName(path);
+        clientFileContent += `  ${name}: {\n`;
+        clientFileContent += `    call(input: { inputs?: ${inputInterfaceName}; messages?: ChatMessage[] }): Promise<${interfaceName}>;\n`;
+        clientFileContent += `  };\n`;
+      }
+      clientFileContent += `}\n`;
+    }
+
+    // Start client class
+    clientFileContent += `\nexport class TypedHumanloopClient {\n`;
+    clientFileContent += `  private client: HumanloopClient;\n`;
+    clientFileContent += `  private environmentId: string;\n\n`;
+
+    // Add typed namespace properties
+    for (const namespace of Object.keys(namespaces)) {
+      clientFileContent += `  public ${namespace}: ${this.capitalizeFirst(
+        namespace
+      )}Namespace;\n`;
+    }
+
+    // Constructor
+    clientFileContent += `\n  constructor(options: { apiKey: string; environmentId: string }) {\n`;
+    clientFileContent += `    this.client = new HumanloopClient({ apiKey: options.apiKey });\n`;
+    clientFileContent += `    this.environmentId = options.environmentId;\n\n`;
+
+    // Initialize namespaces
+    for (const [namespace, prompts] of Object.entries(namespaces)) {
+      clientFileContent += `    this.${namespace} = {\n`;
+      for (const { path, name } of prompts) {
+        const interfaceName = this.getInterfaceName(path);
+        const promptId = this.promptIds[path];
+
+        clientFileContent += `      ${name}: {\n`;
+        // Call method
+        clientFileContent += `        call: async (input) => {\n`;
+        clientFileContent += `          const response = await this.client.prompts.call({\n`;
+        clientFileContent += `            id: "${promptId}",\n`;
+        clientFileContent += `            inputs: input.inputs as unknown as Record<string, unknown>,\n`;
+        clientFileContent += `            messages: input.messages as ChatMessage[],\n`;
+        clientFileContent += `            environment: this.environmentId,\n`;
+        clientFileContent += `          });\n\n`;
+        clientFileContent += `          if (response.logs[0].outputMessage?.toolCalls && response.logs[0].outputMessage?.toolCalls.length > 0) {\n`;
+        clientFileContent += `            const toolCallArgs = response.logs[0].outputMessage?.toolCalls[0].function.arguments;\n`;
+        clientFileContent += `            return typeof toolCallArgs === "string" ? (JSON.parse(toolCallArgs) as ${interfaceName}) : (toolCallArgs as unknown as ${interfaceName});\n`;
+        clientFileContent += `          }\n`;
+        clientFileContent += `          throw new Error("No tool call found in response");\n`;
+        clientFileContent += `        },\n`;
+        clientFileContent += `      },\n`;
+      }
+      clientFileContent += `    };\n`;
+    }
+
+    clientFileContent += `  }\n`;
+    clientFileContent += `}\n`;
+    return clientFileContent;
+  }
+
+  private capitalizeFirst(str: string): string {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  /**
+   * Generate a TypeScript interface from a JSON schema for tool output
+   */
+  private generateInterfaceFromJsonSchema(
+    interfaceName: string,
+    schema: any
+  ): string {
+    let interfaceStr = `export interface ${interfaceName} {\n`;
+
+    if (!schema || !schema.properties) {
+      interfaceStr += "  [key: string]: any;\n";
+      interfaceStr += "}\n";
+      return interfaceStr;
+    }
+
+    for (const [propName, propSchema] of Object.entries(schema.properties)) {
+      const propType = this.getTypeScriptType(propSchema as any, propName);
+      const isRequired = schema.required?.includes(propName);
+
+      interfaceStr += `  ${propName}${isRequired ? "" : "?"}: ${propType};\n`;
+    }
+
+    interfaceStr += "}\n";
+    return interfaceStr;
+  }
+
+  /**
+   * Extract Jinja2 variables from template content using regex
+   */
+  private extractJinjaVariables(
+    template: string[] | { content: string }[]
+  ): string[] {
+    const variables = new Set<string>();
+
+    // Patterns to match different Jinja2 variable usages
+    const patterns = [
+      /\{\{\s*(\w+)\s*\}\}/g, // Basic {{ variable }}
+      /\{%\s*if\s+(\w+)\s*%\}/g, // {% if variable %}
+      /\{%\s*for\s+\w+\s+in\s+(\w+)\s*%\}/g, // {% for item in variable %}
+      /\{\{\s*(\w+)\.\w+\s*\}\}/g, // {{ variable.property }}
+    ];
+
+    const contents = Array.isArray(template)
+      ? template.map((t) => (typeof t === "string" ? t : t.content))
+      : [];
+
+    for (const content of contents) {
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(content)) !== null) {
+          variables.add(match[1]);
+        }
+      }
+    }
+    console.log(variables);
+    return Array.from(variables);
+  }
+
+  /**
+   * Generate a TypeScript interface for input parameters
+   */
+  private generateInputInterfaceFromSchema(
+    interfaceName: string,
+    _inputs: Array<{ name: string }>, // Ignored, only used for type definition
+    template: string[] | { content: string }[]
+  ): string {
+    let interfaceStr = `export interface ${interfaceName} {\n`;
+
+    // Extract required inputs from template
+    const requiredInputs = new Set(this.extractJinjaVariables(template));
+
+    if (requiredInputs.size === 0) {
+      interfaceStr += "  [key: string]: any;\n";
+      interfaceStr += "}\n";
+      return interfaceStr;
+    }
+
+    // Only use the variables found in the template
+    for (const required of requiredInputs) {
+      interfaceStr += `  ${required}: string;\n`;
+    }
+
+    interfaceStr += "}\n";
+    return interfaceStr;
+  }
+
+  /**
+   * Convert a JSON schema type to a TypeScript type
+   */
+  private getTypeScriptType(schema: any, propName: string): string {
+    if (!schema) return "any";
+
+    switch (schema.type) {
+      case "string":
+        if (schema.enum) {
+          return schema.enum.map((val: string) => `'${val}'`).join(" | ");
+        }
+        return "string";
+      case "number":
+      case "integer":
+        return "number";
+      case "boolean":
+        return "boolean";
+      case "array":
+        const itemType = this.getTypeScriptType(
+          schema.items,
+          `${propName}Item`
+        );
+        return `${itemType}[]`;
+      case "object":
+        if (schema.properties) {
+          let objType = "{\n";
+          for (const [subPropName, subPropSchema] of Object.entries(
+            schema.properties
+          )) {
+            const subPropType = this.getTypeScriptType(
+              subPropSchema as any,
+              subPropName
+            );
+            const isRequired = schema.required?.includes(subPropName);
+            objType += `    ${subPropName}${
+              isRequired ? "" : "?"
+            }: ${subPropType};\n`;
+          }
+          objType += "  }";
+          return objType;
+        }
+        return "Record<string, any>";
+      default:
+        return "any";
+    }
+  }
+
+  /**
+   * Generate a valid TypeScript interface name for output from a prompt path
+   * Removes numbers and non-letter characters
+   */
+  private getInterfaceName(promptPath: string): string {
+    return (
+      promptPath
+        .split(/[^a-zA-Z]/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join("") + "Response"
+    );
+  }
+
+  /**
+   * Generate a valid TypeScript interface name for input from a prompt path
+   * Removes numbers and non-letter characters
+   */
+  private getInputInterfaceName(promptPath: string): string {
+    return (
+      promptPath
+        .split(/[^a-zA-Z]/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join("") + "Input"
+    );
+  }
+
+  /**
+   * Generate a valid method name from a prompt path
+   * Removes numbers and non-letter characters
+   */
+  private getMethodName(promptPath: string): string {
+    const parts = promptPath.split(/[^a-zA-Z]/).filter(Boolean);
+    return parts
+      .map((part, index) => {
+        if (index === 0) {
+          return part.toLowerCase();
+        }
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join("");
+  }
+
+  /**
+   * Generate a valid file name from a prompt path
+   */
+  private sanitizeFileName(promptPath: string): string {
+    return promptPath.replace(/[^a-zA-Z0-9]/g, "_");
+  }
+}

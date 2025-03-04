@@ -1,0 +1,33 @@
+{
+  "name": "humanloop-typed",
+  "version": "1.0.0",
+  "description": "Strongly typed wrapper for the Human Loop SDK",
+  "main": "dist/index.js",
+  "bin": {
+    "humanloop-typed": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/cli.ts",
+    "test": "ts-node src/test.ts",
+    "example": "ts-node examples/usage.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "humanloop",
+    "typescript",
+    "types",
+    "generation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "humanloop": "^0.8.15",
+    "typescript": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.79",
+    "dotenv": "^16.4.7",
+    "ts-node": "^10.9.2"
+  }
+}
