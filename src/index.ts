@@ -72,10 +72,13 @@ export class TypedHumanloop {
       // Generate index file to export all types
       let indexFileContent = "";
 
-      // Process each prompt
-      for (const promptSummary of prompts) {
+      // Process prompts concurrently instead of sequentially
+      console.log("Preparing to process prompts concurrently...");
+
+      // Create an array of promises for concurrent execution
+      const promptProcessingPromises = prompts.map(async (promptSummary) => {
         try {
-          console.log(`Processing prompt: ${promptSummary.path}`);
+          console.log(`Fetching details for prompt: ${promptSummary.path}`);
           // Fetch detailed prompt information
           const promptResponse = await this.client.prompts.get(
             promptSummary.id,
@@ -89,7 +92,7 @@ export class TypedHumanloop {
           // Skip prompts without tools
           if (!prompt.tools || prompt.tools.length === 0) {
             console.log(`Skipping prompt ${prompt.path} - no tools defined`);
-            continue;
+            return null; // Return null for skipped prompts
           }
 
           // Store the prompt ID for more resilient calls
@@ -103,62 +106,84 @@ export class TypedHumanloop {
 
           // Generate TypeScript interface for the tool output
           const interfaceName = this.getInterfaceName(prompt.path);
-          const typeDefinition = this.generateInterfaceFromJsonSchema(
+          const interfaceDefinition = this.generateInterfaceFromJsonSchema(
             interfaceName,
             tool.parameters
           );
 
           // Generate TypeScript interface for the input
           const inputInterfaceName = this.getInputInterfaceName(prompt.path);
-          const inputTypeDefinition = this.generateInputInterfaceFromSchema(
-            inputInterfaceName,
-            [],
-            (prompt.template as { content: string }[]) || []
-          );
 
-          // Combine both type definitions
-          const combinedTypeDefinition =
-            inputTypeDefinition + "\n" + typeDefinition;
+          // Use an empty array as fallback for the template to avoid type issues
+          const inputInterfaceDefinition =
+            this.generateInputInterfaceFromSchema(
+              inputInterfaceName,
+              [],
+              (prompt.template
+                ? [{ content: JSON.stringify(prompt.template) }]
+                : []) as { content: string }[]
+            );
 
-          // Store the type definition
-          this.typeDefinitions[prompt.path] = combinedTypeDefinition;
+          // Merge both interface definitions and add export
+          const combinedInterfaceDefinition = `${interfaceDefinition}\n\n${inputInterfaceDefinition}`;
+          this.typeDefinitions[prompt.path] = combinedInterfaceDefinition;
 
-          // Write the type definition to a file
+          // Generate file name with sanitized path
           const fileName = this.sanitizeFileName(prompt.path);
-          const filePath = path.join(outputDir, `${fileName}.ts`);
-          fs.writeFileSync(filePath, combinedTypeDefinition);
+
+          // Create file with interfaces
+          fs.writeFileSync(
+            path.join(outputDir, `${fileName}.ts`),
+            combinedInterfaceDefinition
+          );
 
           // Add export to index file
           indexFileContent += `export * from './${fileName}';\n`;
 
           console.log(`Generated types for prompt: ${prompt.path}`);
+          return {
+            path: prompt.path,
+            fileName,
+            name: this.getMethodName(prompt.name),
+          };
         } catch (error) {
           // Check if this is a file credentials error
           if (
-            (error as any).statusCode === 403 &&
-            (error as any).body?.detail?.description?.includes(
-              "Cannot validate credentials for file"
-            )
+            error instanceof Error &&
+            error.message.includes("file credentials")
           ) {
-            console.log(
+            console.warn(
               `Skipping prompt ${promptSummary.path} - file credential access error`
             );
-            continue;
+            return null;
           }
 
+          // Log any other errors but continue processing
           console.error(
             `Error processing prompt ${promptSummary.path}:`,
             error
           );
+          return null;
         }
-      }
+      });
 
-      // Generate client file
-      const clientFileContent = this.generateClientFile(environmentId);
-      fs.writeFileSync(path.join(outputDir, "client.ts"), clientFileContent);
+      // Wait for all promises to complete
+      console.log("Waiting for all prompt processing to complete...");
+      const promptResults = await Promise.all(promptProcessingPromises);
+
+      // Filter out null results (skipped or errored prompts)
+      const validPromptResults = promptResults.filter(Boolean);
+      console.log(
+        `Successfully processed ${validPromptResults.length} prompts`
+      );
 
       // Write index file
       fs.writeFileSync(path.join(outputDir, "index.ts"), indexFileContent);
+
+      // Generate client file
+      console.log("Generating client file...");
+      const clientFileContent = this.generateClientFile(environmentId);
+      fs.writeFileSync(path.join(outputDir, "client.ts"), clientFileContent);
 
       console.log("Type generation complete!");
     } catch (error) {

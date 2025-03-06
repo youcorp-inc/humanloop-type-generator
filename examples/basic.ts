@@ -9,16 +9,16 @@ const client = new TypedHumanloopClient({
 });
 
 async function main() {
-  const result = await client.getApolloSearch.call({
+  const result = await client.linkedin.replyToLinkedinDm.call({
     inputs: {
-      description: "Hi",
+      callSummaries: "hi there",
+      boardyPhoneNumber: "+1234567890",
+      contact: "John Doe",
+      linkedInMessages: "messages",
     },
   });
 
   console.log("Call result:", result);
-  console.log("Titles:", result.person_titles);
-  console.log("Seniorities:", result.person_seniorities);
-  console.log("Locations:", result.person_locations);
 }
 
 main().catch(console.error);
