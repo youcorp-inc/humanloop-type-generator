@@ -9,7 +9,7 @@ const client = new TypedHumanloopClient({
 });
 
 async function main() {
-  const result = await client.prospecting.getApolloSearch.call({
+  const result = await client.getApolloSearch.call({
     inputs: {
       description: "Hi",
     },

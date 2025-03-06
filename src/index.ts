@@ -35,10 +35,33 @@ export class TypedHumanloop {
     try {
       // Fetch all prompts in the workspace
       console.log("Fetching prompts from Humanloop...");
-      const promptsResponse = await this.client.prompts.list();
+      let allPrompts: any[] = [];
+      let currentPage = 1;
+      const pageSize = 100;
 
-      const prompts = promptsResponse.data;
-      console.log(`Found ${prompts.length} prompts`);
+      // Implement pagination to fetch all prompts
+      let hasMorePages = true;
+
+      while (hasMorePages) {
+        const promptsResponse = await this.client.prompts.list({
+          page: currentPage,
+          size: pageSize,
+        });
+
+        const pagePrompts = promptsResponse.data;
+        allPrompts = [...allPrompts, ...pagePrompts];
+
+        console.log(
+          `Fetched page ${currentPage} with ${pagePrompts.length} prompts`
+        );
+
+        // Check if we need to fetch more pages
+        hasMorePages = pagePrompts.length === pageSize;
+        currentPage++;
+      }
+
+      const prompts = allPrompts;
+      console.log(`Found ${prompts.length} prompts in total`);
 
       // Create output directory if it doesn't exist
       if (!fs.existsSync(outputDir)) {
