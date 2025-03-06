@@ -16,21 +16,27 @@ pnpm add humanloop-type-generator
 
 ### CLI
 
+The generator provides a simple CLI for generating your client:
+
 ```bash
-npx humanloop-typed --apiKey YOUR_API_KEY --environmentId YOUR_ENVIRONMENT_ID --outputDir ./custom-output-dir
+# Generate using environment variables
+npx humanloop generate
+
+# Or with command-line arguments
+npx humanloop generate --apiKey YOUR_API_KEY --environmentId YOUR_ENVIRONMENT_ID
+
+# Specify a custom output directory
+npx humanloop generate --outputDir ./custom-output-dir
+
+# Display help
+npx humanloop help
 ```
 
-Or create a `.env` file with:
+You can also set up a `.env` file with your Humanloop credentials:
 
 ```
 HUMANLOOP_API_KEY=your_api_key
 HUMANLOOP_ENVIRONMENT=your_environment_id
-```
-
-And run:
-
-```bash
-npx humanloop-typed
 ```
 
 ### Generated Client Usage
