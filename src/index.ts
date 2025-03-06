@@ -15,6 +15,7 @@ export class TypedHumanloop {
   private promptIds: Record<string, string> = {}; // Store prompt IDs for more resilient calls
 
   constructor(options: TypedHumanloopOptions) {
+    console.log("Creating TypedHumanloop instance...");
     this.client = new HumanloopClient({
       apiKey: options.apiKey,
     });
@@ -25,7 +26,7 @@ export class TypedHumanloop {
    */
   async initialize(
     environmentId: string,
-    outputDir: string = "./generated-types"
+    outputDir: string = "./humanloop-client"
   ) {
     console.log(
       `Initializing TypedHumanloop for environment: ${environmentId}`
@@ -33,6 +34,7 @@ export class TypedHumanloop {
 
     try {
       // Fetch all prompts in the workspace
+      console.log("Fetching prompts from Humanloop...");
       const promptsResponse = await this.client.prompts.list();
 
       const prompts = promptsResponse.data;
@@ -41,6 +43,7 @@ export class TypedHumanloop {
       // Create output directory if it doesn't exist
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
+        console.log(`Created output directory: ${outputDir}`);
       }
 
       // Generate index file to export all types
@@ -49,6 +52,7 @@ export class TypedHumanloop {
       // Process each prompt
       for (const promptSummary of prompts) {
         try {
+          console.log(`Processing prompt: ${promptSummary.path}`);
           // Fetch detailed prompt information
           const promptResponse = await this.client.prompts.get(
             promptSummary.id,
@@ -144,6 +148,7 @@ export class TypedHumanloop {
    * Generate a TypeScript file with a typed client
    */
   private generateClientFile(environmentId: string): string {
+    console.log("Generating client file...");
     let clientFileContent = `import { HumanloopClient } from "humanloop";\n`;
     clientFileContent += `import { ChatMessage } from "humanloop/api";\n`;
 
@@ -165,8 +170,26 @@ export class TypedHumanloop {
     for (const promptPath of Object.keys(this.typeDefinitions)) {
       const parts = promptPath.split("/");
       if (parts.length > 1) {
-        const namespace = parts[0].toLowerCase().replace(/[^a-z]/g, "");
+        const namespace = this.getNamespace(promptPath);
         const methodName = this.getMethodName(parts[parts.length - 1]);
+
+        console.log(
+          `Path: ${promptPath} => Namespace: ${namespace}, Method: ${methodName}`
+        );
+
+        if (!namespaces[namespace]) {
+          namespaces[namespace] = [];
+        }
+        namespaces[namespace].push({ path: promptPath, name: methodName });
+      } else {
+        // Top-level prompts go into "root" namespace
+        const namespace = "root";
+        const methodName = this.getMethodName(promptPath);
+
+        console.log(
+          `Path: ${promptPath} => Namespace: ${namespace}, Method: ${methodName}`
+        );
+
         if (!namespaces[namespace]) {
           namespaces[namespace] = [];
         }
@@ -216,6 +239,7 @@ export class TypedHumanloop {
         clientFileContent += `      ${name}: {\n`;
         // Call method
         clientFileContent += `        call: async (input) => {\n`;
+        clientFileContent += `          console.log("Calling Humanloop prompt: ${path}");\n`;
         clientFileContent += `          const response = await this.client.prompts.call({\n`;
         clientFileContent += `            id: "${promptId}",\n`;
         clientFileContent += `            inputs: input.inputs as unknown as Record<string, unknown>,\n`;
@@ -380,8 +404,10 @@ export class TypedHumanloop {
    * Removes numbers and non-letter characters
    */
   private getInterfaceName(promptPath: string): string {
+    // Just use the last part of the path for the interface name
+    const lastPathPart = promptPath.split("/").pop() || promptPath;
     return (
-      promptPath
+      lastPathPart
         .split(/[^a-zA-Z]/)
         .filter(Boolean)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -394,8 +420,10 @@ export class TypedHumanloop {
    * Removes numbers and non-letter characters
    */
   private getInputInterfaceName(promptPath: string): string {
+    // Just use the last part of the path for the interface name
+    const lastPathPart = promptPath.split("/").pop() || promptPath;
     return (
-      promptPath
+      lastPathPart
         .split(/[^a-zA-Z]/)
         .filter(Boolean)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -404,17 +432,52 @@ export class TypedHumanloop {
   }
 
   /**
-   * Generate a valid method name from a prompt path
-   * Removes numbers and non-letter characters
+   * Get namespace from prompt path
+   * Handles patterns like "8 - Prospecting/Get Apollo Search" -> "prospecting"
    */
-  private getMethodName(promptPath: string): string {
-    const parts = promptPath.split(/[^a-zA-Z]/).filter(Boolean);
+  private getNamespace(promptPath: string): string {
+    const parts = promptPath.split("/");
+
+    if (parts.length <= 1) {
+      return "root"; // Default namespace for top-level prompts
+    }
+
+    // Handle patterns like "8 - Prospecting" -> "prospecting"
+    const folderPart = parts[0];
+    const matches = folderPart.match(/(?:\d+\s*-\s*)?([a-zA-Z]+)/);
+
+    if (matches && matches[1]) {
+      return matches[1].toLowerCase();
+    }
+
+    // Fallback: just remove numbers and special chars
+    return folderPart.toLowerCase().replace(/[^a-z]/g, "");
+  }
+
+  /**
+   * Generate a valid method name from a prompt path
+   * Handles patterns like "Get Apollo Search" -> "getApolloSearch"
+   */
+  private getMethodName(promptName: string): string {
+    console.log(`Generating method name for: ${promptName}`);
+
+    // Remove any numbers and dashes at the beginning (e.g., "8 - ")
+    const cleanName = promptName.replace(/^\d+\s*-\s*/, "");
+
+    const parts = cleanName.split(/\s+/).filter(Boolean);
+
+    // Convert to camelCase
     return parts
       .map((part, index) => {
+        // Clean the part to only include letters
+        const cleanPart = part.replace(/[^a-zA-Z]/g, "");
+
         if (index === 0) {
-          return part.toLowerCase();
+          return cleanPart.toLowerCase();
         }
-        return part.charAt(0).toUpperCase() + part.slice(1);
+        return (
+          cleanPart.charAt(0).toUpperCase() + cleanPart.slice(1).toLowerCase()
+        );
       })
       .join("");
   }
@@ -423,6 +486,6 @@ export class TypedHumanloop {
    * Generate a valid file name from a prompt path
    */
   private sanitizeFileName(promptPath: string): string {
-    return promptPath.replace(/[^a-zA-Z0-9]/g, "_");
+    return promptPath.replace(/[^a-zA-Z0-9/]/g, "_").replace(/\//g, "__");
   }
 }

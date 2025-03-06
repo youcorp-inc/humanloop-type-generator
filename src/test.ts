@@ -6,70 +6,90 @@ import * as fs from "fs";
 // Load environment variables from .env file
 dotenv.config();
 
-async function runTest() {
-  console.log("Starting test...");
+const outputDir = path.join(process.cwd(), "humanloop-client");
 
-  // Check for required environment variables
-  const apiKey = process.env.HUMANLOOP_API_KEY;
-  const environmentId = process.env.HUMANLOOP_ENVIRONMENT;
+// Clean up the test output directory
+if (fs.existsSync(outputDir)) {
+  fs.rmSync(outputDir, { recursive: true, force: true });
+}
 
-  if (!apiKey || !environmentId) {
-    console.error(
-      "Missing required environment variables. Please create a .env file with:"
+// Create a mock structure to test the naming conventions
+const mockPromptTest = async () => {
+  // Testing the naming functions directly
+  const typedClient = new TypedHumanloop({
+    apiKey: process.env.HUMANLOOP_API_KEY || "",
+  });
+
+  // These are private methods but we'll call them for testing purposes
+  const testCases = [
+    "8 - Prospecting/Get Apollo Search",
+    "Get X Reply",
+    "marketing/4 - Email/Generate Subject",
+    "Summarize Text",
+  ];
+
+  console.log("\n--- Testing naming conventions ---\n");
+
+  for (const testCase of testCases) {
+    // @ts-ignore - accessing private method for testing
+    const namespace = typedClient["getNamespace"](testCase);
+
+    // Get the method name from the last part of the path
+    const parts = testCase.split("/");
+    // @ts-ignore - accessing private method for testing
+    const methodName = typedClient["getMethodName"](parts[parts.length - 1]);
+
+    console.log(`Path: ${testCase}`);
+    console.log(`Namespace: ${namespace}`);
+    console.log(`Method: ${methodName}`);
+    console.log(
+      `Generated reference: client.${namespace}.${methodName}.call({...})`
     );
-    console.error("HUMANLOOP_API_KEY=your_api_key");
-    console.error("HUMANLOOP_ENVIRONMENT=your_environment_id");
+    console.log();
+  }
+};
+
+const runTestGeneration = async () => {
+  // Make sure API key is available
+  if (!process.env.HUMANLOOP_API_KEY) {
+    console.error("Missing HUMANLOOP_API_KEY environment variable");
     process.exit(1);
   }
 
-  // Create output directory for test
-  const outputDir = path.join(__dirname, "../test-output");
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+  if (!process.env.HUMANLOOP_ENVIRONMENT) {
+    console.error("Missing HUMANLOOP_ENVIRONMENT environment variable");
+    process.exit(1);
   }
 
-  try {
-    console.log("Initializing TypedHumanloop...");
-
-    // Initialize the typed client
-    const typedClient = new TypedHumanloop({ apiKey });
-    await typedClient.initialize(environmentId, outputDir);
-
-    console.log("\nType generation successful!");
-    console.log(`Types have been generated in: ${outputDir}`);
-    console.log("\nNext steps:");
-    console.log(
-      "1. Import the TypedHumanloopClient from the generated client.ts file"
-    );
-    console.log(
-      "2. Create a client instance with your API key, workspace ID, and environment ID"
-    );
-    console.log("3. Call the generated methods with full type safety");
-    console.log("\nExample usage:");
-    console.log(`
-import { TypedHumanloopClient } from '${outputDir}/client';
-
-const client = new TypedHumanloopClient({
-  apiKey: '${apiKey.substring(0, 3)}...${apiKey.substring(apiKey.length - 3)}',
-  environmentId: '${environmentId}'
-});
-
-// Example for a prompt named "8 - Prospecting/Get Apollo Search"
-async function main() {
-  const result = await client.getApolloSearch({
-    inputs: {
-      description: "Looking for senior software engineers in San Francisco"
-    }
+  // Initialize the typed client
+  console.log("Creating TypedHumanloop client...");
+  const typedClient = new TypedHumanloop({
+    apiKey: process.env.HUMANLOOP_API_KEY,
   });
-  
-  console.log(result);
-}
 
-main().catch(console.error);
-`);
+  // Generate types
+  console.log(`Generating types to ${outputDir}`);
+  await typedClient.initialize(process.env.HUMANLOOP_ENVIRONMENT, outputDir);
+
+  console.log("\nDone! Types generated in humanloop-client directory.");
+  console.log("Check the examples/usage.ts file for usage examples.\n");
+};
+
+const main = async () => {
+  try {
+    await mockPromptTest();
+
+    if (process.env.HUMANLOOP_API_KEY && process.env.HUMANLOOP_ENVIRONMENT) {
+      console.log("\n--- Running test with actual Humanloop API ---\n");
+      await runTestGeneration();
+    } else {
+      console.log(
+        "\n--- Skipping actual API test - environment variables not set ---\n"
+      );
+    }
   } catch (error) {
-    console.error("Test failed:", error);
+    console.error("Error in test:", error);
   }
-}
+};
 
-runTest().catch(console.error);
+main();

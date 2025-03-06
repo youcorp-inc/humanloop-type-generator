@@ -6,7 +6,6 @@ import * as path from "path";
 
 interface CliConfig {
   apiKey: string;
-  workspaceId: string;
   environmentId: string;
   outputDir: string;
 }
@@ -43,19 +42,18 @@ async function main() {
       const configPath = path.resolve(process.cwd(), args.config);
       const configContent = fs.readFileSync(configPath, "utf8");
       config = JSON.parse(configContent);
-    } catch (error) {
-      console.error(`Error reading config file: ${error.message}`);
+    } catch (error: unknown) {
+      console.error(`Error reading config file: ${(error as Error).message}`);
       process.exit(1);
     }
   } else {
     // Use command line args or environment variables
     config = {
       apiKey: args.apiKey || process.env.HUMANLOOP_API_KEY || "",
-      workspaceId: args.workspaceId || process.env.HUMANLOOP_WORKSPACE || "",
       environmentId:
         args.environmentId || process.env.HUMANLOOP_ENVIRONMENT || "",
       outputDir:
-        args.outputDir || process.env.OUTPUT_DIR || "./generated-types",
+        args.outputDir || process.env.OUTPUT_DIR || "./humanloop-client",
     };
   }
 
@@ -63,13 +61,6 @@ async function main() {
   if (!config.apiKey) {
     console.error(
       "API key is required. Provide it via --apiKey, HUMANLOOP_API_KEY env var, or config file."
-    );
-    process.exit(1);
-  }
-
-  if (!config.workspaceId) {
-    console.error(
-      "Workspace ID is required. Provide it via --workspaceId, HUMANLOOP_WORKSPACE env var, or config file."
     );
     process.exit(1);
   }
@@ -82,12 +73,9 @@ async function main() {
   }
 
   // Initialize the typed client
+  console.log("Initializing TypedHumanloop client...");
   const typedClient = new TypedHumanloop({ apiKey: config.apiKey });
-  await typedClient.initialize(
-    config.workspaceId,
-    config.environmentId,
-    config.outputDir
-  );
+  await typedClient.initialize(config.environmentId, config.outputDir);
 
   console.log(
     "Done! You can now import the generated types and client from your output directory."

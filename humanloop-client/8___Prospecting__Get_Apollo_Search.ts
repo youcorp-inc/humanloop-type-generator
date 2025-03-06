@@ -1,8 +1,8 @@
-export interface ProspectingGetApolloSearchInput {
+export interface GetApolloSearchInput {
   description: string;
 }
 
-export interface ProspectingGetApolloSearchResponse {
+export interface GetApolloSearchResponse {
   person_titles: string[];
   person_seniorities: 'owner' | 'founder' | 'c_suite' | 'partner' | 'vp' | 'head' | 'director' | 'manager' | 'senior' | 'entry' | 'intern'[];
   person_locations: string[];

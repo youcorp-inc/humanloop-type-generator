@@ -1,92 +1,97 @@
-# Humanloop Typed
+# Humanloop Type Generator
 
-A strongly typed wrapper for the Human Loop SDK that generates TypeScript types for your prompts and provides a typed client.
+A strongly typed SDK generator for [Humanloop](https://humanloop.com/) that creates TypeScript interfaces and a client for your Humanloop project. It preserves the folder structure of your prompts and provides autocompletion for your inputs and outputs.
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/humanloop-typed.git
-cd humanloop-typed
-
-# Install dependencies
-pnpm install
-
-# Build the project
-pnpm build
-```
-
-## Configuration
-
-Create a `.env` file in the root directory with the following variables:
-
-```
-HUMANLOOP_API_KEY=your_api_key_here
-HUMANLOOP_WORKSPACE=your_workspace_id_here
-HUMANLOOP_ENVIRONMENT=your_environment_id_here
+npm install humanloop-type-generator
+# or
+yarn add humanloop-type-generator
+# or
+pnpm add humanloop-type-generator
 ```
 
 ## Usage
 
-### Generate Types
+### CLI
 
 ```bash
-# Using environment variables from .env
-pnpm start
-
-# Using command line arguments
-pnpm start -- --apiKey your-api-key --workspaceId your-workspace-id --environmentId your-environment-id
-
-# Using a config file
-pnpm start -- --config ./config.json
+npx humanloop-typed --apiKey YOUR_API_KEY --environmentId YOUR_ENVIRONMENT_ID --outputDir ./custom-output-dir
 ```
 
-### Run the Test
+Or create a `.env` file with:
+
+```
+HUMANLOOP_API_KEY=your_api_key
+HUMANLOOP_ENVIRONMENT=your_environment_id
+```
+
+And run:
 
 ```bash
-pnpm test
+npx humanloop-typed
 ```
 
-This will generate types in the `test-output` directory and show example usage.
+### Generated Client Usage
 
-### Run the Example
+The generated client will match your folder structure in Humanloop. For example:
 
-```bash
-# First generate types with pnpm test, then:
-pnpm example
-```
+In Humanloop:
 
-### Programmatic Usage
+- `8 - Prospecting/Get Apollo Search`
+- `Get X Reply`
+
+Becomes in code:
 
 ```typescript
-import { TypedHumanloop } from "./dist";
+import { TypedHumanloopClient } from "./humanloop-client/client";
 
-// Initialize the typed client
-const typedClient = new TypedHumanloop({ apiKey: "your-api-key" });
-await typedClient.initialize(
-  "your-workspace-id",
-  "your-environment-id",
-  "./generated-types"
-);
-
-// Import the generated client
-import { TypedHumanloopClient } from "./generated-types/client";
-
-// Create a typed client instance
 const client = new TypedHumanloopClient({
-  apiKey: "your-api-key",
-  environmentId: "your-environment-id",
+  apiKey: "your_api_key",
+  environmentId: "your_environment_id",
 });
 
-// Call a prompt with full type safety
-const result = await client.getApolloSearch({
+// Using namespaced prompt from a folder
+const apolloResult = await client.prospecting.getApolloSearch.call({
   inputs: {
-    description: "Looking for senior software engineers in San Francisco",
+    // Type-safe inputs
+    query: "search term",
   },
 });
 
-// TypeScript knows the exact shape of the result!
-console.log(result.person_titles);
+// Using root-level prompt
+const xReply = await client.root.getXReply.call({
+  inputs: {
+    // Type-safe inputs
+    username: "johndoe",
+  },
+});
+
+// Type-safe outputs
+console.log(apolloResult.people);
 ```
 
-## Output
+## Features
+
+- 🌳 Preserves your Humanloop folder structure
+- 📝 Generates TypeScript types for inputs and outputs
+- 🖊️ Converts prompt names to camelCase method names
+- 🔄 Handles input and output type conversion
+
+## Command Line Options
+
+- `--apiKey`: Your Humanloop API key
+- `--environmentId`: Your Humanloop environment ID
+- `--outputDir`: Directory to output generated files (default: ./humanloop-client)
+- `--config`: Path to a config file
+
+## Environment Variables
+
+- `HUMANLOOP_API_KEY`: Your Humanloop API key
+- `HUMANLOOP_ENVIRONMENT`: Your Humanloop environment ID
+- `OUTPUT_DIR`: Directory to output generated files
+
+## License
+
+MIT

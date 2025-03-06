@@ -1,7 +1,7 @@
 {
-  "name": "humanloop-typed",
+  "name": "humanloop-type-generator",
   "version": "1.0.0",
-  "description": "Strongly typed wrapper for the Human Loop SDK",
+  "description": "Strongly typed wrapper for the Humanloop SDK that preserves folder structure",
   "main": "dist/index.js",
   "bin": {
     "humanloop-typed": "dist/cli.js"

@@ -1,9 +1,9 @@
-export interface ProspectingSelectBestProfilesInput {
+export interface SelectBestProfilesInput {
   query: string;
   prospects: string;
 }
 
-export interface ProspectingSelectBestProfilesResponse {
+export interface SelectBestProfilesResponse {
   recommendations: {
     linkedin_slug: string;
     justification: string;

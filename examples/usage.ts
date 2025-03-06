@@ -1,55 +1,52 @@
+import { TypedHumanloopClient } from "../humanloop-client/client";
 import * as dotenv from "dotenv";
-import * as path from "path";
 
-// Load environment variables
 dotenv.config();
+
+const client = new TypedHumanloopClient({
+  apiKey: process.env.HUMANLOOP_API_KEY as string,
+  environmentId: process.env.HUMANLOOP_ENVIRONMENT as string,
+});
 
 async function main() {
   try {
-    // Dynamically import the generated client to avoid import errors if it doesn't exist yet
-    const { TypedHumanloopClient } = await import(
-      path.join(__dirname, "../test-output/client")
-    );
+    // Example of calling a prompt in a folder
+    console.log("Calling a folder-based prompt (if available):");
 
-    const apiKey = process.env.HUMANLOOP_API_KEY;
-    const environmentId = process.env.HUMANLOOP_ENVIRONMENT;
+    // This is an example - your actual prompt paths will be different
+    // For example, if you have a prompt at "8 - Prospecting/Get Apollo Search"
+    if (client.prospecting) {
+      const result = await client.prospecting.getApolloSearch.call({
+        inputs: {
+          description: "Example search",
+        },
+      });
 
-    if (!apiKey || !environmentId) {
-      console.error("Missing required environment variables");
-      process.exit(1);
+      console.log("Folder-based prompt result:", result);
+    } else {
+      console.log(
+        "No 'prospecting' namespace available in your Humanloop project"
+      );
     }
 
-    // Create a typed client instance
-    const client = new TypedHumanloopClient({
-      apiKey,
-      environmentId,
-    });
+    // Example of calling a root-level prompt
+    console.log("\nCalling a root-level prompt (if available):");
+    if (client.root) {
+      // For a prompt named "Get X Reply" at the root level
+      const replyResult = await client.root.getXReply.call({
+        inputs: {
+          // Your inputs here
+          username: "example_user",
+        },
+      });
 
-    // Example usage for the Apollo Search prompt
-    console.log("Calling the Apollo Search prompt...");
-
-    const result = await client.getApolloSearch({
-      inputs: {
-        description:
-          "Looking for senior software engineers with AI experience in San Francisco",
-      },
-    });
-
-    console.log("Result:");
-    console.log(JSON.stringify(result, null, 2));
-
-    // Access typed properties
-    console.log("\nPerson Titles:");
-    console.log(result.person_titles);
-
-    console.log("\nPerson Seniorities:");
-    console.log(result.person_seniorities);
-
-    console.log("\nPerson Locations:");
-    console.log(result.person_locations);
+      console.log("Root-level prompt result:", replyResult);
+    } else {
+      console.log("No root-level prompts available in your Humanloop project");
+    }
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error in example:", error);
   }
 }
 
-main().catch(console.error);
+main();

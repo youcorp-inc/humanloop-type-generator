@@ -1,8 +1,8 @@
-export interface ProspectingGenerateProspectProfilesInput {
+export interface GenerateProspectProfilesInput {
   user_data: string;
 }
 
-export interface ProspectingGenerateProspectProfilesResponse {
+export interface GenerateProspectProfilesResponse {
   connection_profiles: {
     title: string;
     description: string;
