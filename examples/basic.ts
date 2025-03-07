@@ -18,7 +18,7 @@ async function main() {
     },
   });
 
-  console.log("Call result:", result);
+  console.log("Call result:", result.response);
 }
 
 main().catch(console.error);

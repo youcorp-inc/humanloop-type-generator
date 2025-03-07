@@ -31,10 +31,11 @@ export class TypedHumanloop {
     console.log(
       `Initializing TypedHumanloop for environment: ${environmentId}`
     );
+    const startTime = Date.now();
 
     try {
       // Fetch all prompts in the workspace
-      console.log("Fetching prompts from Humanloop...");
+      console.log("⏳ Fetching prompts from Humanloop...");
       let allPrompts: any[] = [];
       let currentPage = 1;
       const pageSize = 100;
@@ -51,34 +52,28 @@ export class TypedHumanloop {
         const pagePrompts = promptsResponse.data;
         allPrompts = [...allPrompts, ...pagePrompts];
 
-        console.log(
-          `Fetched page ${currentPage} with ${pagePrompts.length} prompts`
-        );
-
         // Check if we need to fetch more pages
         hasMorePages = pagePrompts.length === pageSize;
         currentPage++;
       }
 
       const prompts = allPrompts;
-      console.log(`Found ${prompts.length} prompts in total`);
+      console.log(`✅ Found ${prompts.length} prompts in total`);
 
       // Create output directory if it doesn't exist
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
-        console.log(`Created output directory: ${outputDir}`);
       }
 
       // Generate index file to export all types
       let indexFileContent = "";
 
       // Process prompts concurrently instead of sequentially
-      console.log("Preparing to process prompts concurrently...");
+      console.log("⏳ Processing prompts concurrently...");
 
       // Create an array of promises for concurrent execution
       const promptProcessingPromises = prompts.map(async (promptSummary) => {
         try {
-          console.log(`Fetching details for prompt: ${promptSummary.path}`);
           // Fetch detailed prompt information
           const promptResponse = await this.client.prompts.get(
             promptSummary.id,
@@ -91,7 +86,6 @@ export class TypedHumanloop {
 
           // Skip prompts without tools
           if (!prompt.tools || prompt.tools.length === 0) {
-            console.log(`Skipping prompt ${prompt.path} - no tools defined`);
             return null; // Return null for skipped prompts
           }
 
@@ -140,7 +134,6 @@ export class TypedHumanloop {
           // Add export to index file
           indexFileContent += `export * from './${fileName}';\n`;
 
-          console.log(`Generated types for prompt: ${prompt.path}`);
           return {
             path: prompt.path,
             fileName,
@@ -168,26 +161,28 @@ export class TypedHumanloop {
       });
 
       // Wait for all promises to complete
-      console.log("Waiting for all prompt processing to complete...");
       const promptResults = await Promise.all(promptProcessingPromises);
 
       // Filter out null results (skipped or errored prompts)
       const validPromptResults = promptResults.filter(Boolean);
       console.log(
-        `Successfully processed ${validPromptResults.length} prompts`
+        `✅ Successfully processed ${validPromptResults.length} prompts with tools`
       );
 
       // Write index file
       fs.writeFileSync(path.join(outputDir, "index.ts"), indexFileContent);
 
       // Generate client file
-      console.log("Generating client file...");
+      console.log("⏳ Generating client file...");
       const clientFileContent = this.generateClientFile(environmentId);
       fs.writeFileSync(path.join(outputDir, "client.ts"), clientFileContent);
 
-      console.log("Type generation complete!");
+      const endTime = Date.now();
+      const elapsedSeconds = ((endTime - startTime) / 1000).toFixed(2);
+      console.log(`✅ Type generation complete in ${elapsedSeconds}s!`);
+      console.log(`📁 Output directory: ${path.resolve(outputDir)}`);
     } catch (error) {
-      console.error("Error initializing TypedHumanloop:", error);
+      console.error("Error during initialization:", error);
       throw error;
     }
   }
@@ -196,9 +191,10 @@ export class TypedHumanloop {
    * Generate a TypeScript file with a typed client
    */
   private generateClientFile(environmentId: string): string {
-    console.log("Generating client file...");
-    let clientFileContent = `import { HumanloopClient } from "humanloop";\n`;
-    clientFileContent += `import { ChatMessage } from "humanloop/api";\n`;
+    let clientFileContent = `// Generated TypeScript client for Humanloop
+import { HumanloopClient } from "humanloop";
+import { ChatMessage } from "humanloop/api";
+`;
 
     // Import all generated interfaces
     for (const [promptPath, _] of Object.entries(this.typeDefinitions)) {
@@ -221,10 +217,6 @@ export class TypedHumanloop {
         const namespace = this.getNamespace(promptPath);
         const methodName = this.getMethodName(parts[parts.length - 1]);
 
-        console.log(
-          `Path: ${promptPath} => Namespace: ${namespace}, Method: ${methodName}`
-        );
-
         if (!namespaces[namespace]) {
           namespaces[namespace] = [];
         }
@@ -233,10 +225,6 @@ export class TypedHumanloop {
         // Top-level prompts go into "root" namespace
         const namespace = "root";
         const methodName = this.getMethodName(promptPath);
-
-        console.log(
-          `Path: ${promptPath} => Namespace: ${namespace}, Method: ${methodName}`
-        );
 
         if (!namespaces[namespace]) {
           namespaces[namespace] = [];
@@ -368,7 +356,7 @@ export class TypedHumanloop {
         }
       }
     }
-    console.log(variables);
+
     return Array.from(variables);
   }
 
@@ -507,8 +495,6 @@ export class TypedHumanloop {
    * Handles patterns like "Get Apollo Search" -> "getApolloSearch"
    */
   private getMethodName(promptName: string): string {
-    console.log(`Generating method name for: ${promptName}`);
-
     // Remove any numbers and dashes at the beginning (e.g., "8 - ")
     const cleanName = promptName.replace(/^\d+\s*-\s*/, "");
 

@@ -1,7 +1,7 @@
 {
-  "name": "humanloop-type-generator",
-  "version": "1.0.0",
-  "description": "Strongly typed wrapper for the Humanloop SDK that preserves folder structure",
+  "name": "@boardy/humanloop-type-generator",
+  "version": "1.1.0",
+  "description": "Strongly typed wrapper for the Humanloop SDK that preserves folder structure and generates TypeScript interfaces",
   "main": "dist/index.js",
   "bin": {
     "humanloop": "dist/cli.js"
@@ -17,9 +17,19 @@
     "humanloop",
     "typescript",
     "types",
-    "generation"
+    "generation",
+    "ai",
+    "llm",
+    "prompt",
+    "sdk",
+    "client"
   ],
-  "author": "",
+  "author": "Abhinav Boyed",
+  "homepage": "https://github.com/abhinav/humanloop-type-generator",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abhinav/humanloop-type-generator.git"
+  },
   "license": "MIT",
   "dependencies": {
     "humanloop": "^0.8.15",
@@ -29,5 +39,8 @@
     "@types/node": "^18.19.79",
     "dotenv": "^16.4.7",
     "ts-node": "^10.9.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }

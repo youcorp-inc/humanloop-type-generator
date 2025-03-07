@@ -5,11 +5,11 @@ A strongly typed SDK generator for [Humanloop](https://humanloop.com/) that crea
 ## Installation
 
 ```bash
-npm install humanloop-type-generator
+npm install @boardy/humanloop-type-generator
 # or
-yarn add humanloop-type-generator
+yarn add @boardy/humanloop-type-generator
 # or
-pnpm add humanloop-type-generator
+pnpm add @boardy/humanloop-type-generator
 ```
 
 ## Usage
@@ -84,6 +84,9 @@ console.log(apolloResult.people);
 - 📝 Generates TypeScript types for inputs and outputs
 - 🖊️ Converts prompt names to camelCase method names
 - 🔄 Handles input and output type conversion
+- ⚡ Fast concurrent processing of prompts
+- 📄 Supports workspaces with large numbers of prompts through pagination
+- 🧩 Creates type-safe interfaces based on your prompt definitions
 
 ## Command Line Options
 
@@ -97,6 +100,18 @@ console.log(apolloResult.people);
 - `HUMANLOOP_API_KEY`: Your Humanloop API key
 - `HUMANLOOP_ENVIRONMENT`: Your Humanloop environment ID
 - `OUTPUT_DIR`: Directory to output generated files
+
+## Performance
+
+The generator processes all prompts concurrently, making it highly efficient even for workspaces with many prompts.
+
+## Requirements
+
+This package requires:
+
+- Node.js 14 or higher
+- Humanloop API access
+- Prompts with defined tool schemas for optimal type generation
 
 ## License
 
