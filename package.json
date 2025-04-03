@@ -1,6 +1,6 @@
 {
-  "name": "@boardy/humanloop-type-generator",
-  "version": "1.1.0",
+  "name": "@boardy-inc/humanloop-type-generator",
+  "version": "1.1.1",
   "description": "Strongly typed wrapper for the Humanloop SDK that preserves folder structure and generates TypeScript interfaces",
   "main": "dist/index.js",
   "bin": {
@@ -11,7 +11,10 @@
     "start": "ts-node src/cli.ts",
     "test": "ts-node src/test.ts",
     "example": "ts-node examples/usage.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "ci": "npm ci && npm run build && npm test",
+    "version": "git add -A src",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "humanloop",
@@ -25,10 +28,10 @@
     "client"
   ],
   "author": "Abhinav Boyed",
-  "homepage": "https://github.com/abhinav/humanloop-type-generator",
+  "homepage": "https://github.com/youcorp-inc/humanloop-type-generator",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abhinav/humanloop-type-generator.git"
+    "url": "git+https://github.com/youcorp-inc/humanloop-type-generator.git"
   },
   "license": "MIT",
   "dependencies": {
