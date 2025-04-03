@@ -373,17 +373,15 @@ import { ChatMessage } from "humanloop/api";
     // Extract required inputs from template
     const requiredInputs = new Set(this.extractJinjaVariables(template));
 
-    if (requiredInputs.size === 0) {
-      interfaceStr += "  [key: string]: any;\n";
-      interfaceStr += "}\n";
-      return interfaceStr;
+    // Add specific input types if they exist
+    if (requiredInputs.size > 0) {
+      for (const required of requiredInputs) {
+        interfaceStr += `  ${required}: string;\n`;
+      }
     }
 
-    // Only use the variables found in the template
-    for (const required of requiredInputs) {
-      interfaceStr += `  ${required}: string;\n`;
-    }
-
+    // Add index signature to allow additional properties of any type
+    interfaceStr += "  [key: string]: any;\n";
     interfaceStr += "}\n";
     return interfaceStr;
   }
