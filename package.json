@@ -11,8 +11,8 @@
     "start": "ts-node src/cli.ts",
     "test": "ts-node src/test.ts",
     "example": "ts-node examples/usage.ts",
-    "prepublishOnly": "npm run build",
-    "ci": "npm ci && npm run build && npm test",
+    "prepublishOnly": "pnpm run build",
+    "ci": "pnpm install --frozen-lockfile && pnpm run build && pnpm test",
     "version": "git add -A src",
     "postversion": "git push && git push --tags"
   },
